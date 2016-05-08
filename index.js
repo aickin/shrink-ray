@@ -73,7 +73,7 @@ function compression(options) {
 
     // proxy
 
-    res.write = function(chunk, encoding){
+    res.write = function(chunk, encoding, cb){
       if (ended) {
         return false
       }
@@ -83,19 +83,19 @@ function compression(options) {
       }
 
       return stream
-        ? stream.write(new Buffer(chunk, encoding))
-        : write.call(this, chunk, encoding)
+        ? stream.write(new Buffer(chunk, encoding), cb)
+        : write.call(this, chunk, encoding, cb)
     };
 
-    res.end = function(chunk, encoding){
+    res.end = function(chunk, encoding, cb){
       if (ended) {
         return false
       }
 
       if (!this._header) {
         // estimate the length
-        if (!this.getHeader('Content-Length')) {
-          length = chunkLength(chunk, encoding)
+        if (!this.getHeader('Content-Length'), cb) {
+          length = chunkLength(chunk, encoding, cb)
         }
 
         this._implicitHeader()
