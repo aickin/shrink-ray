@@ -8,7 +8,7 @@
     "Sasha Aickin"
   ],
   "license": "MIT",
-  "repository": "aickin/compression",
+  "repository": "aickin/shrink-ray",
   "keywords": [
     "compression",
     "gzip",
