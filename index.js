@@ -81,8 +81,6 @@ function compression (options) {
 
   var shouldCache = opts.cache || function () { return true }
 
-  var dummyBrotliFlush = function () { }
-
   return function compression (req, res, next) {
     var ended = false
     var length
@@ -239,8 +237,6 @@ function compression (options) {
         switch (method) {
           case 'br':
             stream = iltorb.compressStream(brotliOpts)
-            // brotli has no flush method. add a dummy flush method here.
-            stream.flush = dummyBrotliFlush
             break
           case 'gzip':
             stream = zlib.createGzip(zlibOpts)

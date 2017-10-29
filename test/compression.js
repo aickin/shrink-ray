@@ -527,17 +527,6 @@ describe('compression()', function () {
         done()
       })
     })
-
-    it('should not throw if flush() is called', function (done) {
-      var server = createServer({ threshold: 0 }, function (req, res) {
-        res.setHeader('Content-Type', 'text/plain')
-        res.write('hello, ')
-        res.flush()
-        res.end('world')
-      })
-
-      brotliRequest(server).expect('Content-Encoding', 'br', done)
-    })
   })
 
   describe('when caching is turned on', function () {
@@ -813,6 +802,37 @@ describe('compression()', function () {
       .end()
     })
 
+    it('should flush the response for brotli', function (done) {
+      var chunks = 0
+      var resp
+      var server = createServer({ threshold: 0 }, function (req, res) {
+        resp = res
+        res.setHeader('Content-Type', 'text/plain')
+        res.setHeader('Content-Length', '2048')
+        write()
+      })
+
+      function write () {
+        chunks++
+        if (chunks === 2) return resp.end()
+        if (chunks > 2) return chunks--
+        resp.write(new Buffer(1024))
+        resp.flush()
+      }
+
+      brotliRequest(server)
+      .request()
+      .on('response', function (res) {
+        assert.equal(res.headers['content-encoding'], 'br')
+        res.on('data', write)
+        res.on('end', function () {
+          assert.equal(chunks, 2)
+          done()
+        })
+      })
+      .end()
+    })
+
     it('should flush small chunks for gzip', function (done) {
       var chunks = 0
       var resp
@@ -864,6 +884,36 @@ describe('compression()', function () {
       .request()
       .on('response', function (res) {
         assert.equal(res.headers['content-encoding'], 'deflate')
+        res.on('data', write)
+        res.on('end', function () {
+          assert.equal(chunks, 20)
+          done()
+        })
+      })
+      .end()
+    })
+
+    it('should flush small chunks for brotli', function (done) {
+      var chunks = 0
+      var resp
+      var server = createServer({ threshold: 0 }, function (req, res) {
+        resp = res
+        res.setHeader('Content-Type', 'text/plain')
+        write()
+      })
+
+      function write () {
+        chunks++
+        if (chunks === 20) return resp.end()
+        if (chunks > 20) return chunks--
+        resp.write('..')
+        resp.flush()
+      }
+
+      brotliRequest(server)
+      .request()
+      .on('response', function (res) {
+        assert.equal(res.headers['content-encoding'], 'br')
         res.on('data', write)
         res.on('end', function () {
           assert.equal(chunks, 20)
