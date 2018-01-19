@@ -8,6 +8,16 @@ var request = require('supertest')
 
 var compression = require('..')
 
+var describeHttp2 = describe.skip
+try {
+  var http2 = require('http2')
+  describeHttp2 = describe
+} catch (err) {
+  if (err) {
+    console.log('http2 tests disabled.')
+  }
+}
+
 describe('compression()', function () {
   it('should skip HEAD', function (done) {
     var server = createServer({ threshold: 0 }, function (req, res) {
@@ -294,6 +304,26 @@ describe('compression()', function () {
     .expect('Content-Encoding', 'gzip')
     .expect(shouldHaveBodyLength(len * 4))
     .expect(200, done)
+  })
+
+  describeHttp2('http2', function () {
+    it('should work with http2 server', function (done) {
+      var server = createHttp2Server({ threshold: 0 }, function (req, res) {
+        res.setHeader('Content-Type', 'text/plain')
+        res.end('hello, world')
+      })
+      server.on('listening', function () {
+        var client = createHttp2Client(server.address().port)
+        var request = client.request({
+          'Accept-Encoding': 'gzip'
+        })
+        request.on('response', function (headers) {
+          assert.equal(headers['content-encoding'], 'gzip')
+          closeHttp2(request, client, server, done)
+        })
+        request.end()
+      })
+    })
   })
 
   describe('threshold', function () {
@@ -888,6 +918,50 @@ function createServer (opts, fn) {
       fn(req, res)
     })
   })
+}
+
+function createHttp2Server (opts, fn) {
+  var _compression = compression(opts)
+  var server = http2.createServer(function (req, res) {
+    _compression(req, res, function (err) {
+      if (err) {
+        res.statusCode = err.status || 500
+        res.end(err.message)
+        return
+      }
+
+      fn(req, res)
+    })
+  })
+  server.listen(0, '127.0.0.1')
+  return server
+}
+
+function createHttp2Client (port) {
+  var client = http2.connect('http://127.0.0.1:' + port)
+  return client
+}
+
+function closeHttp2 (request, client, server, callback) {
+  if (typeof client.shutdown === 'function') {
+    // this is the node v8.x way of closing the connections
+    request.destroy(http2.constants.NGHTTP2_NO_ERROR, function () {
+      client.shutdown({}, function () {
+        server.close(function () {
+          callback()
+        })
+      })
+    })
+  } else {
+    // this is the node v9.x onwards (hopefully) way of closing the connections
+    request.close(http2.constants.NGHTTP2_NO_ERROR, function () {
+      client.close(function () {
+        server.close(function () {
+          callback()
+        })
+      })
+    })
+  }
 }
 
 function shouldHaveBodyLength (length) {
